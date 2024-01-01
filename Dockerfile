@@ -1,5 +1,5 @@
 FROM --platform=amd64 archlinux:latest
-#RUN pacman-key --refresh-keys
+RUN pacman-key --refresh-keys
 #RUN pacman-conf
 RUN pacman -Syyu base-devel --noconfirm
 RUN pacman -Syyu arm-none-eabi-gcc --noconfirm
