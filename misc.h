@@ -207,9 +207,6 @@ extern volatile bool         gTxTimeoutReached;
 
 extern volatile uint16_t     gTailNoteEliminationCountdown_10ms;
 
-#ifdef ENABLE_FMRADIO
-	extern volatile uint16_t gFmPlayCountdown_10ms;
-#endif
 #ifdef ENABLE_NOAA
 	extern volatile uint16_t gNOAA_Countdown_10ms;
 #endif
@@ -263,9 +260,6 @@ extern bool                  gFlagPrepareTX;
 extern bool                  gFlagAcceptSetting;   // accept menu setting
 extern bool                  gFlagRefreshSetting;  // refresh menu display
 
-extern bool                  gFlagSaveVfo;
-extern bool                  gFlagSaveSettings;
-extern bool                  gFlagSaveChannel;
 #ifdef ENABLE_FMRADIO
 	extern bool              gFlagSaveFM;
 #endif

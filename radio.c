@@ -56,35 +56,27 @@ const char gModulationStr[MODULATION_UKNOWN][4] = {
 
 
 
-bool RADIO_CheckValidChannel(uint16_t Channel, bool bCheckScanList, uint8_t VFO)
+bool RADIO_CheckValidChannel(uint16_t channel, bool checkScanList, uint8_t scanList)
 {
 	// return true if the channel appears valid
-	if (!IS_MR_CHANNEL(Channel)) {
+	if (!IS_MR_CHANNEL(channel))
 		return false;
-	}
 
-	const ChannelAttributes_t att = gMR_ChannelAttributes[Channel];
+	const ChannelAttributes_t att = gMR_ChannelAttributes[channel];
 
-	if (att.band > BAND7_470MHz) {
+	if (att.band > BAND7_470MHz)
 		return false;
-	}
 
-	if (!bCheckScanList) {
+	if (!checkScanList || scanList > 1)
 		return true;
-	}
 
-	if (VFO >= 2) {
-		return true;
-	}
-
-	if (!att.scanlist1) {
+	if (scanList ? !att.scanlist2 : !att.scanlist1)
 		return false;
-	}
 
-	const uint8_t PriorityCh1 = gEeprom.SCANLIST_PRIORITY_CH1[VFO];
-	const uint8_t PriorityCh2 = gEeprom.SCANLIST_PRIORITY_CH2[VFO];
+	const uint8_t PriorityCh1 = gEeprom.SCANLIST_PRIORITY_CH1[scanList];
+	const uint8_t PriorityCh2 = gEeprom.SCANLIST_PRIORITY_CH2[scanList];
 
-	return PriorityCh1 != Channel && PriorityCh2 != Channel;
+	return PriorityCh1 != channel && PriorityCh2 != channel;
 }
 
 uint8_t RADIO_FindNextChannel(uint8_t Channel, int8_t Direction, bool bCheckScanList, uint8_t VFO)
@@ -424,56 +416,37 @@ void RADIO_ConfigureSquelchAndOutputPower(VFO_Info_t *pInfo)
 		EEPROM_ReadBuffer(Base + 0x40, &pInfo->SquelchCloseGlitchThresh, 1);  //  90    90
 		EEPROM_ReadBuffer(Base + 0x50, &pInfo->SquelchOpenGlitchThresh,  1);  // 100   100
 
-		uint16_t rssi_open    = pInfo->SquelchOpenRSSIThresh;
-		uint16_t rssi_close   = pInfo->SquelchCloseRSSIThresh;
+
 		uint16_t noise_open   = pInfo->SquelchOpenNoiseThresh;
 		uint16_t noise_close  = pInfo->SquelchCloseNoiseThresh;
+
+#if ENABLE_SQUELCH_MORE_SENSITIVE
+		uint16_t rssi_open    = pInfo->SquelchOpenRSSIThresh;
+		uint16_t rssi_close   = pInfo->SquelchCloseRSSIThresh;
 		uint16_t glitch_open  = pInfo->SquelchOpenGlitchThresh;
 		uint16_t glitch_close = pInfo->SquelchCloseGlitchThresh;
-
-		#if ENABLE_SQUELCH_MORE_SENSITIVE
-			// make squelch a little more sensitive
-			//
-			// getting the best setting here is still experimental, bare with me
-			//
-			// note that 'noise' and 'glitch' values are inverted compared to 'rssi' values
-
-			#if 0
-				rssi_open   = (rssi_open   * 8) / 9;
-				noise_open  = (noise_open  * 9) / 8;
-				glitch_open = (glitch_open * 9) / 8;
-			#else
-				// even more sensitive .. use when RX bandwidths are fixed (no weak signal auto adjust)
-				rssi_open   = (rssi_open   * 1) / 2;
-				noise_open  = (noise_open  * 2) / 1;
-				glitch_open = (glitch_open * 2) / 1;
-			#endif
-
-		#else
-			// more sensitive .. use when RX bandwidths are fixed (no weak signal auto adjust)
-			rssi_open   = (rssi_open   * 3) / 4;
-			noise_open  = (noise_open  * 4) / 3;
-			glitch_open = (glitch_open * 4) / 3;
-		#endif
-
-		rssi_close   = (rssi_open   *  9) / 10;
-		noise_close  = (noise_open  * 10) / 9;
-		glitch_close = (glitch_open * 10) / 9;
+		// make squelch more sensitive
+		// note that 'noise' and 'glitch' values are inverted compared to 'rssi' values
+		rssi_open   = (rssi_open   * 1) / 2;
+		noise_open  = (noise_open  * 2) / 1;
+		glitch_open = (glitch_open * 2) / 1;
 
 		// ensure the 'close' threshold is lower than the 'open' threshold
-		if (rssi_close   == rssi_open   && rssi_close   >= 2)
+		if (rssi_close == rssi_open && rssi_close >= 2)
 			rssi_close -= 2;
-		if (noise_close  == noise_open  && noise_close  <= 125)
+		if (noise_close == noise_open && noise_close  <= 125)
 			noise_close += 2;
 		if (glitch_close == glitch_open && glitch_close <= 253)
 			glitch_close += 2;
 
 		pInfo->SquelchOpenRSSIThresh    = (rssi_open    > 255) ? 255 : rssi_open;
 		pInfo->SquelchCloseRSSIThresh   = (rssi_close   > 255) ? 255 : rssi_close;
-		pInfo->SquelchOpenNoiseThresh   = (noise_open   > 127) ? 127 : noise_open;
-		pInfo->SquelchCloseNoiseThresh  = (noise_close  > 127) ? 127 : noise_close;
 		pInfo->SquelchOpenGlitchThresh  = (glitch_open  > 255) ? 255 : glitch_open;
 		pInfo->SquelchCloseGlitchThresh = (glitch_close > 255) ? 255 : glitch_close;
+#endif
+
+		pInfo->SquelchOpenNoiseThresh   = (noise_open   > 127) ? 127 : noise_open;
+		pInfo->SquelchCloseNoiseThresh  = (noise_close  > 127) ? 127 : noise_close;
 	}
 
 	// *******************************
@@ -725,24 +698,8 @@ void RADIO_SetupRegisters(bool switchToForeground)
 	// RX expander
 	BK4819_SetCompander((gRxVfo->Modulation == MODULATION_FM && gRxVfo->Compander >= 2) ? gRxVfo->Compander : 0);
 
-#if 0
-	if (!gRxVfo->DTMF_DECODING_ENABLE && !gSetting_KILLED)
-	{
-		BK4819_DisableDTMF();
-	}
-	else
-	{
-		BK4819_EnableDTMF();
-		InterruptMask |= BK4819_REG_3F_DTMF_5TONE_FOUND;
-	}
-#else
-	BK4819_DisableDTMF();
-
-	if (gCurrentFunction != FUNCTION_TRANSMIT) {
-		BK4819_EnableDTMF();
-		InterruptMask |= BK4819_REG_3F_DTMF_5TONE_FOUND;
-	}
-#endif
+	BK4819_EnableDTMF();
+	InterruptMask |= BK4819_REG_3F_DTMF_5TONE_FOUND;
 
 	RADIO_SetupAGC(gRxVfo->Modulation == MODULATION_AM, false);
 
